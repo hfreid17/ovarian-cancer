@@ -41,9 +41,9 @@ expfpkmfile = /Users/maayanlab/Documents/Ovarian Cancer Project/ovarian-cancer/r
 ########## 1. Creating dataframe
 #############################################
 
-@transform(input = expfpkmfile, output = /rawdata/df_expfpkm.txt)
+@transform(input = expfpkmfile, output = /rawdata/df_expfpkm.csv)
 df_expfpkm = pd.read_table(expfpkmfile).set_index('gene_symbol')
-df_expfpkm.to_csv("/rawdata/df_expfpkm.txt", sep=" ")
+df_expfpkm.to_csv("/rawdata/df_expfpkm.csv")
 
 
 
@@ -59,38 +59,64 @@ df_expfpkm.to_csv("/rawdata/df_expfpkm.txt", sep=" ")
 ### Output: Dictionary of the top 500 and bottom 500 genes for each sample
 
 ############################################################
-########## 1.Z-scores across rows and columns of dataframe
+########## 1. Z-scores across rows and columns of dataframe
 ############################################################
 
-@transform(input = /rawdata/df_expfpkm.txt, output = /rawdata_expfpkm_zscore.txt)
-# axis=0 is along rows
-df_expfpkm_zscore = df_expfpkm.T.apply(ss.zscore, axis=0).T.dropna().apply(ss.zscore, axis=0)
+@transform(input = /rawdata/df_expfpkm.csv, output = /rawdata/df_expfpkm_zscore.csv)
+
+def zscore(infile, outfile):
+    infile = /rawdata/df_expfpkm.csv
+    # axis=0 is along rows
+    df_expfpkm_zscore = df_expfpkm.T.apply(ss.zscore, axis=0).T.dropna().apply(ss.zscore, axis=0)
+    outfile = df_expfpkm_zscore.to_csv('rawdata/df_expfpkm_zscore.csv')
 
 ############################################################
 ########## 2. Creating dictionary of gene signatures
 ############################################################
 
-# define empty dictionary
-results = {}
+@transform(input = /rawdata/df_expfpkm_zscore.csv, output = /rawdata/dict_signatures.txt)
 
-
-# Loop through samples
-for sample in df_expfpkm_zscore.columns[5:]:
+def signatures(infile, outfile):
     
-    # Extract column
-    col = df_expfpkm_zscore[sample].sort_values(ascending=False) # sort values in decreasing order
+    infile = /rawdata/df_expfpkm_zscore.csv
     
-    genesets = {
-        "top":col.index[:500].tolist(),
-        "bottom":col.index[-500:].tolist()
+    # define empty dictionary
+    signatures = {}
+    
+    
+    # Loop through samples 
+    for sample in df_expfpkm_zscore.columns[5:]:
+        # Extract column
+        col = df_expfpkm_zscore[sample].sort_values(ascending=False) # sort values in decreasing order
+        
+        genesets = {
+            "top":col.index[:500].tolist(),
+            "bottom":col.index[-500:].tolist()
+            
+            }
+            
+        # Extract the top 500 genes from the index
+        signatures[sample] = genesets
 
-    }
-    # Extract the top 500 genes from the index
-    results[sample] = genesets
+    # Save dictionary to .txt file
+    outfile = /rawdata/dict_signatures.txt
+    outfile = open("")
 
 
 
+#######################################################
+#######################################################
+########## S3. Find L1000fwd Reversing Drugs-result ids
+#######################################################
+#######################################################
 
+##### Gene signatures for each sample is used on L1000fwd to find result ids for samples for reversing drugs for signatures.
+### Input: Dictionary of the top 500 and bottom 500 genes for each sample
+### Output: Dictionary of the L1000fwd reversing drug result ids for each sample
+
+############################################################
+########## 1.
+############################################################
 
 
 
