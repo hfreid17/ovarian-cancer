@@ -189,10 +189,10 @@ def L1000reversingresultids(infile, outfile):
 
 
 def L1000mimickingresultids(infile, outfile):
-
-
     
     # query the L1000 signatures using gene sets
+
+
     import json, requests
     from pprint import pprint
 
@@ -247,13 +247,93 @@ def L1000mimickingresultids(infile, outfile):
 #######################################################################
 
 
+@transform(L1000reversingresultids,
+            suffix('_L1000reversingresultids.json'),
+            "_L1000reversingtop50ids.json")
+
+
+def L1000reversingtop50(infile, outfile):
+    
+    import json, requests
+    from pprint import pprint
+
+    with open(infile) as infile2:
+        l1000reversingresultids2 = json.load(infile2)
+    
+    
+    # create empty dictionary
+    l1000_reversing_top50 = {}
+    
+    
+    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+    
+    
+    for k in l1000reversingresultids2:
+        result_id = str(l1000reversingresultids2[k])
+        result_id_edited = result_id[14:40]
+        
+        response = requests.get(L1000FWD_URL + 'result/topn/' + result_id_edited)
+        
+        if response.status_code == 200:
+            l1000_reversing_top50[k] = response.json() #adding top 50 results to dictionary
+            json.dump(response.json(), open('api4_result.json', 'w'), indent=4)
+
+
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(l1000_reversing_top50, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
 
 
 
 
+########################################################################
+########## 2. Top 50 signature ids for mimicking drugs for each sample
+#######################################################################
+@transform(L1000reversingresultids,
+            suffix('_L1000mimickingresultids.json'),
+            "_L1000mimickingtop50ids.json")
 
 
+def L1000mimickingtop50(infile, outfile):
+    
+    import json, requests
+    from pprint import pprint
 
+    with open(infile) as infile2:
+        l1000mimickingresultids2 = json.load(infile2)
+    
+    
+    # create empty dictionary
+    l1000_mimicking_top50 = {}
+    
+    
+    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+    
+    
+    for k in l1000mimickingresultids2:
+        result_id = str(l1000mimickingresultids2[k])
+        result_id_edited = result_id[14:40]
+        
+        response = requests.get(L1000FWD_URL + 'result/topn/' + result_id_edited)
+        
+        if response.status_code == 200:
+            l1000_mimicking_top50[k] = response.json() #adding top 50 results to dictionary
+            json.dump(response.json(), open('api4_result.json', 'w'), indent=4)
+
+
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(l1000_mimcking_top50, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
 
 
 
@@ -267,7 +347,99 @@ def L1000mimickingresultids(infile, outfile):
 ##### Takes L1000fwd top 50 signature ids for each sample and ouputs signature--use this to extract drug.
 ### Input: Dictionary of the L1000fwd top 50 signatue ids for each sample.
 ### Output: Dataframe of the 50 top drugs for each sample--index is drug
-############################################################
-########## 1. ??
-############################################################
 
+##############################################################
+########## 1. Getting single singature by id--reversing drugs
+##############################################################
+
+@transform(L1000reversingtop50,
+            suffix('_L1000reversingtop50ids.json'),
+            "_L1000reversingdrugsignatureids.json")
+
+
+def L1000reversingdrugsignatures(infile, outfile):
+    
+    import json, requests
+    from pprint import pprint
+
+    with open(infile) as infile2:
+        l1000reversingtop50ids2 = json.load(infile2)
+
+    # create empty dictionary
+    l1000_reversing_signatureids = {}
+    
+    
+    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+
+
+    for sample in l1000reversingtop50ids2:
+        sig_id = l1000reversingtop50ids2[sample] # might need to take part of the string/might be a nested dictionary
+        response = requests.get(L1000FWD_URL + 'sig/' + sig_id)
+        if response.status_code == 200:
+            l1000_reversing_signatureids = response.json()
+            json.dump(response.json(), open('api2_result.json', 'wb'), indent=4)
+
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(l1000_reversing_signatureids, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
+
+
+
+##############################################################
+########## 2. Getting perturbation/drug--reversing drugs
+##############################################################
+
+
+
+
+##############################################################
+########## 3. Getting single singature by id--mimicking drugs
+##############################################################
+
+@transform(L1000mimickingtop50,
+            suffix('_L1000mimickingtop50ids.json'),
+            "_L1000mimickingdrugsignatureids.json")
+
+
+def L1000mimickingdrugsignatures(infile, outfile):
+    
+    import json, requests
+    from pprint import pprint
+
+    with open(infile) as infile2:
+        l1000mimickingtop50ids2 = json.load(infile2)
+
+    # create empty dictionary
+    l1000_mimicking_signatureids = {}
+    
+    
+    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+
+
+    for sample in l1000mimickingtop50ids2:
+        sig_id = l1000mimickingtop50ids2[sample] # might need to take part of the string/might be a nested dictionary
+        response = requests.get(L1000FWD_URL + 'sig/' + sig_id)
+        if response.status_code == 200:
+            l1000_mimicking_signatureids = response.json()
+            json.dump(response.json(), open('api2_result.json', 'wb'), indent=4)
+
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(l1000_mimicking_signatureids, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
+
+
+
+
+##############################################################
+########## 4. Getting perturbation/drug--mimicking drugs
+##############################################################
