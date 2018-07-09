@@ -151,8 +151,8 @@ def L1000reversingresultids(infile, outfile):
     with open(infile) as infile2:
         signature_data = json.load(infile2)
 
-    # Loop through dictionary
-    for sample, genesets in signature_data.items():
+    # Loop through dictionary--NEED TO CHANGE THIS--NESTED DICTIONARY
+    for sampl in signature_data.items():
 
         payload = {
             # put downregulated genes in the upregulated spot to find drugs that reverse the signature
@@ -270,7 +270,7 @@ def L1000reversingtop50(infile, outfile):
     
     for k in l1000reversingresultids2:
         result_id = str(l1000reversingresultids2[k])
-        result_id_edited = result_id[14:40]
+        result_id_edited = result_id[15:39]
         
         response = requests.get(L1000FWD_URL + 'result/topn/' + result_id_edited)
         
@@ -294,7 +294,7 @@ def L1000reversingtop50(infile, outfile):
 ########################################################################
 ########## 2. Top 50 signature ids for mimicking drugs for each sample
 #######################################################################
-@transform(L1000reversingresultids,
+@transform(L1000mimickingresultids,
             suffix('_L1000mimickingresultids.json'),
             "_L1000mimickingtop50ids.json")
 
@@ -317,7 +317,7 @@ def L1000mimickingtop50(infile, outfile):
     
     for k in l1000mimickingresultids2:
         result_id = str(l1000mimickingresultids2[k])
-        result_id_edited = result_id[14:40]
+        result_id_edited = result_id[15:39]
         
         response = requests.get(L1000FWD_URL + 'result/topn/' + result_id_edited)
         
@@ -330,7 +330,7 @@ def L1000mimickingtop50(infile, outfile):
     f = open(outfile, 'w')
 
     # write to file
-    f.write(json.dumps(l1000_mimcking_top50, ensure_ascii=False, indent=4))
+    f.write(json.dumps(l1000_mimicking_top50, ensure_ascii=False, indent=4))
 
     # close file
     f.close()
@@ -354,7 +354,7 @@ def L1000mimickingtop50(infile, outfile):
 
 @transform(L1000reversingtop50,
             suffix('_L1000reversingtop50ids.json'),
-            "_L1000reversingdrugsignatureids.json")
+            "_L1000reversingsignatures.json")
 
 
 def L1000reversingdrugsignatures(infile, outfile):
@@ -362,80 +362,88 @@ def L1000reversingdrugsignatures(infile, outfile):
     import json, requests
     from pprint import pprint
 
+    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+
     with open(infile) as infile2:
         l1000reversingtop50ids2 = json.load(infile2)
 
     # create empty dictionary
-    l1000_reversing_signatureids = {}
-    
-    
-    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+    l1000_reversing_signatures_fromid = {}
 
 
-    for sample in l1000reversingtop50ids2:
-        sig_id = l1000reversingtop50ids2[sample] # might need to take part of the string/might be a nested dictionary
-        response = requests.get(L1000FWD_URL + 'sig/' + sig_id)
-        if response.status_code == 200:
-            l1000_reversing_signatureids = response.json()
-            json.dump(response.json(), open('api2_result.json', 'wb'), indent=4)
+    # looping through each key (sample id)
+    for key in list(l1000reversingtop50ids2.keys()):
+        list_sig_ids = []
+
+        # looping through each signature id for each sample in the "similar" drugs category 
+        for item in l1000reversingtop50ids2[key]["similar"]: 
+            sig_id = (item['sig_id'])
+            response = requests.get(L1000FWD_URL + 'sig/' + sig_id)
+
+            if response.status_code == 200:
+                list_sig_ids.append(response.json())
+                json.dump(response.json(), open('api2_result.json', 'w'), indent=4)
+        
+        l1000_reversing_signatures_fromid[key] = list_sig_ids
+
 
     # open file
     f = open(outfile, 'w')
 
     # write to file
-    f.write(json.dumps(l1000_reversing_signatureids, ensure_ascii=False, indent=4))
+    f.write(json.dumps(l1000_reversing_signatures_fromid, ensure_ascii=False, indent=4))
 
     # close file
     f.close()
 
 
 
-##############################################################
-########## 2. Getting perturbation/drug--reversing drugs
-##############################################################
+# ##############################################################
+# ########## 2. Getting perturbation/drug--reversing drugs
+# ##############################################################
 
 
 
 
-##############################################################
-########## 3. Getting single singature by id--mimicking drugs
-##############################################################
+# ##############################################################
+# ########## 3. Getting single singature by id--mimicking drugs
+# ##############################################################
 
-@transform(L1000mimickingtop50,
-            suffix('_L1000mimickingtop50ids.json'),
-            "_L1000mimickingdrugsignatureids.json")
+# @transform(L1000mimickingtop50,
+#             suffix('_L1000mimickingtop50ids.json'),
+#             "_L1000mimickingdrugsignatureids.json")
 
 
-def L1000mimickingdrugsignatures(infile, outfile):
+# def L1000mimickingdrugsignatures(infile, outfile):
     
-    import json, requests
-    from pprint import pprint
+#     import json, requests
+#     from pprint import pprint
 
-    with open(infile) as infile2:
-        l1000mimickingtop50ids2 = json.load(infile2)
+#     with open(infile) as infile2:
+#         l1000mimickingtop50ids2 = json.load(infile2)
 
-    # create empty dictionary
-    l1000_mimicking_signatureids = {}
+#     # create empty dictionary
+#     l1000_mimicking_signatureids = {}
     
     
-    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+#     L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
 
 
-    for sample in l1000mimickingtop50ids2:
-        sig_id = l1000mimickingtop50ids2[sample] # might need to take part of the string/might be a nested dictionary
-        response = requests.get(L1000FWD_URL + 'sig/' + sig_id)
-        if response.status_code == 200:
-            l1000_mimicking_signatureids = response.json()
-            json.dump(response.json(), open('api2_result.json', 'wb'), indent=4)
+#     for sample in l1000mimickingtop50ids2:
+#         sig_id = l1000mimickingtop50ids2[sample] # might need to take part of the string/might be a nested dictionary
+#         response = requests.get(L1000FWD_URL + 'sig/' + sig_id)
+#         if response.status_code == 200:
+#             l1000_mimicking_signatureids = response.json()
+#             json.dump(response.json(), open('api2_result.json', 'wb'), indent=4)
 
-    # open file
-    f = open(outfile, 'w')
+#     # open file
+#     f = open(outfile, 'w')
 
-    # write to file
-    f.write(json.dumps(l1000_mimicking_signatureids, ensure_ascii=False, indent=4))
+#     # write to file
+#     f.write(json.dumps(l1000_mimicking_signatureids, ensure_ascii=False, indent=4))
 
-    # close file
-    f.close()
+#     # close file
+#     f.close()
 
 
 
