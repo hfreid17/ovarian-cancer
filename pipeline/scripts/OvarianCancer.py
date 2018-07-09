@@ -346,7 +346,7 @@ def L1000mimickingtop50(infile, outfile):
 
 ##### Takes L1000fwd top 50 signature ids for each sample and ouputs signature--use this to extract drug.
 ### Input: Dictionary of the L1000fwd top 50 signatue ids for each sample.
-### Output: Dataframe of the 50 top drugs for each sample--index is drug
+### Output: Dataframe of the 50 top drugs for each sample--index is drug???
 
 ##############################################################
 ########## 1. Getting single singature by id--reversing drugs
@@ -409,45 +409,72 @@ def L1000reversingdrugsignatures(infile, outfile):
 # ########## 3. Getting single singature by id--mimicking drugs
 # ##############################################################
 
-# @transform(L1000mimickingtop50,
-#             suffix('_L1000mimickingtop50ids.json'),
-#             "_L1000mimickingdrugsignatureids.json")
+@transform(L1000mimickingtop50,
+            suffix('_L1000mimickingtop50ids.json'),
+            "_L1000mimickingsignatures.json")
 
 
-# def L1000mimickingdrugsignatures(infile, outfile):
+def L1000mimickingdrugsignatures(infile, outfile):
     
-#     import json, requests
-#     from pprint import pprint
+    import json, requests
+    from pprint import pprint
 
-#     with open(infile) as infile2:
-#         l1000mimickingtop50ids2 = json.load(infile2)
+    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
 
-#     # create empty dictionary
-#     l1000_mimicking_signatureids = {}
-    
-    
-#     L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+    with open(infile) as infile2:
+        l1000mimickingtop50ids2 = json.load(infile2)
+
+    # create empty dictionary
+    l1000_mimicking_signatures_fromid = {}
 
 
-#     for sample in l1000mimickingtop50ids2:
-#         sig_id = l1000mimickingtop50ids2[sample] # might need to take part of the string/might be a nested dictionary
-#         response = requests.get(L1000FWD_URL + 'sig/' + sig_id)
-#         if response.status_code == 200:
-#             l1000_mimicking_signatureids = response.json()
-#             json.dump(response.json(), open('api2_result.json', 'wb'), indent=4)
+    # looping through each key (sample id)
+    for key in list(l1000mimickingtop50ids2.keys()):
+        list_sig_ids = []
 
-#     # open file
-#     f = open(outfile, 'w')
+        # looping through each signature id for each sample in the "similar" drugs category 
+        for item in l1000mimickingtop50ids2[key]["similar"]: 
+            sig_id = (item['sig_id'])
+            response = requests.get(L1000FWD_URL + 'sig/' + sig_id)
 
-#     # write to file
-#     f.write(json.dumps(l1000_mimicking_signatureids, ensure_ascii=False, indent=4))
+            if response.status_code == 200:
+                list_sig_ids.append(response.json())
+                json.dump(response.json(), open('api2_result.json', 'w'), indent=4)
+        
+        l1000_mimicking_signatures_fromid[key] = list_sig_ids
 
-#     # close file
-#     f.close()
+
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(l1000_mimicking_signatures_fromid, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
 
 
 
 
 ##############################################################
 ########## 4. Getting perturbation/drug--mimicking drugs
+##############################################################
+
+
+
+
+
+
+#########################################################
+#########################################################
+########## S6. Heatmap/Clustermap of Drugs from L1000fwd
+#########################################################
+#########################################################
+
+##### Takes ??? and makes heatmap/clustergram (separate for reversing and mimicking) of drugs from L1000fwd based on p-value.
+### Input: ???
+### Output: 2 heatmaps--based on p-value, one for reversing and one for mimicking, currently used drugs are colored differently
+
+##############################################################
+########## 1. Getting single singature by id--reversing drugs
 ##############################################################
