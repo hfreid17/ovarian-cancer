@@ -151,8 +151,8 @@ def L1000reversingresultids(infile, outfile):
     with open(infile) as infile2:
         signature_data = json.load(infile2)
 
-    # Loop through dictionary--NEED TO CHANGE THIS--NESTED DICTIONARY
-    for sampl in signature_data.items():
+    # Loop through dictionary
+    for sample in signature_data.items():
 
         payload = {
             # put downregulated genes in the upregulated spot to find drugs that reverse the signature
@@ -460,9 +460,82 @@ def L1000mimickingdrugsignatures(infile, outfile):
 ########## 4. Getting perturbation/drug--mimicking drugs
 ##############################################################
 
+@transform(L1000reversingdrugsignatures,
+            suffix('_L1000reversingsignatures.json'),
+            "_L1000testlistpert.json")
 
 
 
+def testpertids(infile, outfile):
+    
+    with open(infile) as infile2:
+        l1000reversingsignatures2 = json.load(infile2)
+
+
+
+    list_pertids = []
+
+    for key in list(l1000reversingsignatures2.keys()):
+        for item in l1000reversingsignatures2[key]:
+            pert_id = item['pert_id']
+            list_pertids.append(pert_id)
+
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(list_pertids, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
+
+
+
+@transform(L1000reversingtop50,
+            suffix('_L1000reversingtop50ids.json'),
+            "_L1000testlistpval.json")
+
+
+def testpvals(infile, outfile):
+    
+    with open(infile) as infile2:
+        l1000reversingtop50test = json.load(infile2)
+
+    list_pvals2 = []
+    for key in list(l1000reversingtop50test.keys()):
+        for item in l1000reversingtop50test[key]['similar']:
+            pval = item["pvals"]
+            list_pvals2.append(pval)
+    
+        
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(list_pvals2, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
+
+
+@transform([testpertids, testpvals], regex('_L1000testlistp....json'),
+            "_L1000_testdf.csv")
+
+
+def testdf(infiles, outfile):
+    
+    pertids2 = json.loads(open("rawdata/TCGA-OV-fpkm-uq_L1000testlistpert.json").read())
+    pvals2 = json.loads(open("rawdata/TCGA-OV-fpkm-uq_L1000testlistpval.json").read())
+
+
+
+    df_pertids_pvals = pd.DataFrame()
+
+    df_pertids_pvals['pert_ids'] = pertids2
+    df_pertids_pvals['pvals'] = pvals2
+
+   # Save df to outfile
+    df_pertids_pvals.to_csv(outfile, sep='\t')  
 
 
 #########################################################
@@ -477,4 +550,4 @@ def L1000mimickingdrugsignatures(infile, outfile):
 
 ##############################################################
 ########## 1. Getting single singature by id--reversing drugs
-##############################################################
+###############################################################
