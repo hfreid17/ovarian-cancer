@@ -17,6 +17,8 @@ import pandas as pd
 import numpy as np
 import scipy.stats as ss
 import json
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 ##### 2. Custom modules #####
 # Pipeline running
@@ -240,7 +242,7 @@ def L1000mimickingresultids(infile, outfile):
 
 ##### Takes L1000fwd result ids for each sample and gives top 50 signature ids. Does this for both the reversing and mimicking drugs.
 ### Input: Dictionary of L1000fwd result ids for each sample
-### Output: Dictionary of the L1000fwd top 50 signature ids for each sample.
+### Output: Nested dictionary of the L1000fwd top 50 signature ids for each sample.
 
 ########################################################################
 ########## 1. Top 50 signature ids for reversing drugs for each sample
@@ -270,12 +272,12 @@ def L1000reversingtop50(infile, outfile):
     
     for k in l1000reversingresultids2:
         result_id = str(l1000reversingresultids2[k])
-        result_id_edited = result_id[15:39]
+        result_id_edited = result_id[15:39] # getting just result id from string
         
         response = requests.get(L1000FWD_URL + 'result/topn/' + result_id_edited)
         
         if response.status_code == 200:
-            l1000_reversing_top50[k] = response.json() #adding top 50 results to dictionary
+            l1000_reversing_top50[k] = response.json() # adding top 50 results to dictionary
             json.dump(response.json(), open('api4_result.json', 'w'), indent=4)
 
 
@@ -317,12 +319,12 @@ def L1000mimickingtop50(infile, outfile):
     
     for k in l1000mimickingresultids2:
         result_id = str(l1000mimickingresultids2[k])
-        result_id_edited = result_id[15:39]
+        result_id_edited = result_id[15:39] # getting just result id from string
         
         response = requests.get(L1000FWD_URL + 'result/topn/' + result_id_edited)
         
         if response.status_code == 200:
-            l1000_mimicking_top50[k] = response.json() #adding top 50 results to dictionary
+            l1000_mimicking_top50[k] = response.json() # adding top 50 results to dictionary
             json.dump(response.json(), open('api4_result.json', 'w'), indent=4)
 
 
@@ -338,15 +340,16 @@ def L1000mimickingtop50(infile, outfile):
 
 
 
-#######################################################
-#######################################################
-########## S5. L1000fwd Get Single Signature by ID
-#######################################################
-#######################################################
+#####################################################################################################
+#####################################################################################################
+########## S5. L1000fwd Get Single Signature by Signature ID and Get Perturbation ID from Signature.
+#####################################################################################################
+#####################################################################################################
 
-##### Takes L1000fwd top 50 signature ids for each sample and ouputs signature--use this to extract drug.
+##### Takes L1000fwd top 50 signature ids for each sample and ouputs signature and then retrives perturbation id from signature,
+##### as well as perturbation p-value, which is found in top 50 results dictionary. Done for both reversing and mimicking drugs.
 ### Input: Dictionary of the L1000fwd top 50 signatue ids for each sample.
-### Output: Dataframe of the 50 top drugs for each sample--index is drug???
+### Output: Nested dictionary of drug signatures for each sample and dictionary of perturbation ids and their p-values.
 
 ##############################################################
 ########## 1. Getting single singature by id--reversing drugs
@@ -399,14 +402,7 @@ def L1000reversingdrugsignatures(infile, outfile):
 
 
 # ##############################################################
-# ########## 2. Getting perturbation/drug--reversing drugs
-# ##############################################################
-
-
-
-
-# ##############################################################
-# ########## 3. Getting single singature by id--mimicking drugs
+# ########## 2. Getting single singature by id--mimicking drugs
 # ##############################################################
 
 @transform(L1000mimickingtop50,
@@ -456,17 +452,31 @@ def L1000mimickingdrugsignatures(infile, outfile):
 
 
 
-##############################################################
-########## 4. Getting perturbation/drug--mimicking drugs
-##############################################################
+
+
+
+#####################################################################################################
+#####################################################################################################
+########## S6. L1000fwd Get Perturbation ID from Signature and P-value for each Perturbation.
+#####################################################################################################
+#####################################################################################################
+
+##### From signature, extract perturbation id and from top 50 results dictionary, extract perturbation p-value. Done for both reversing and mimicking.
+### Inputs: Nested dictionary of the L1000fwd top 50 signatue ids for each sample and nested dictionary of the L1000fwd signatures for each sample.
+### Output: Dictionary of perturbation ids (key) and p-value for each perturbation id (value).
+
+######################################################################
+########## 1. Getting perturbation id from signature--reversing drugs
+######################################################################
+
 
 @transform(L1000reversingdrugsignatures,
             suffix('_L1000reversingsignatures.json'),
-            "_L1000testlistpert.json")
+            "_L1000reversinglistpert.json")
 
 
 
-def testpertids(infile, outfile):
+def reversingpertids(infile, outfile):
     
     with open(infile) as infile2:
         l1000reversingsignatures2 = json.load(infile2)
@@ -491,19 +501,25 @@ def testpertids(infile, outfile):
 
 
 
+
+######################################################################
+########## 2. Getting p-value for each perturbation--reversing drugs
+######################################################################
+
+
 @transform(L1000reversingtop50,
             suffix('_L1000reversingtop50ids.json'),
-            "_L1000testlistpval.json")
+            "_L1000reversinglistpval.json")
 
 
-def testpvals(infile, outfile):
+def reversingpvals(infile, outfile):
     
     with open(infile) as infile2:
-        l1000reversingtop50test = json.load(infile2)
+        l1000reversingtop502 = json.load(infile2)
 
     list_pvals2 = []
-    for key in list(l1000reversingtop50test.keys()):
-        for item in l1000reversingtop50test[key]['similar']:
+    for key in list(l1000reversingtop502.keys()):
+        for item in l1000reversingtop502[key]['similar']:
             pval = item["pvals"]
             list_pvals2.append(pval)
     
@@ -518,36 +534,149 @@ def testpvals(infile, outfile):
     f.close()
 
 
-@transform([testpertids, testpvals], regex('_L1000testlistp....json'),
+
+################################################################################################
+########## 3. Making dictionary and dataframe of perturbation ids and p-values--reversing drugs
+################################################################################################
+
+
+@transform([reversingpertids, reversingpvals], regex('_L1000reversinglistp....json'),
             "_L1000_testdf.csv")
 
 
 def testdf(infiles, outfile):
     
-    pertids2 = json.loads(open("rawdata/TCGA-OV-fpkm-uq_L1000testlistpert.json").read())
-    pvals2 = json.loads(open("rawdata/TCGA-OV-fpkm-uq_L1000testlistpval.json").read())
+    pertids2 = json.loads(open("rawdata/TCGA-OV-fpkm-uq_L1000reversinglistpert.json").read())
+    pvals2 = json.loads(open("rawdata/TCGA-OV-fpkm-uq_L1000reversinglistpval.json").read())
+
+    # array_test = [pertids2, pvals2]
+    # clustermap = sns.clustermap(np.log10(array_test+1), z_score=0, cmap="RdBu_r")
 
 
 
-    df_pertids_pvals = pd.DataFrame()
+    # dict_pert_pval = dict(zip(pertids2, pvals2))
+    
+
+    df_pertids_pvals = pd.DataFrame() 
+
 
     df_pertids_pvals['pert_ids'] = pertids2
-    df_pertids_pvals['pvals'] = pvals2
+
+    df_pertids_pvals["pvals"] = pvals2
+
+    # df_pertids_pvals.set_index('pert_ids')
 
    # Save df to outfile
     df_pertids_pvals.to_csv(outfile, sep='\t')  
 
 
-#########################################################
-#########################################################
-########## S6. Heatmap/Clustermap of Drugs from L1000fwd
-#########################################################
-#########################################################
 
-##### Takes ??? and makes heatmap/clustergram (separate for reversing and mimicking) of drugs from L1000fwd based on p-value.
-### Input: ???
-### Output: 2 heatmaps--based on p-value, one for reversing and one for mimicking, currently used drugs are colored differently
+######################################################################
+########## 4. Getting perturbation id from signature--mimicking drugs
+######################################################################
+
+
+@transform(L1000mimickingdrugsignatures,
+            suffix('_L1000mimickingsignatures.json'),
+            "_L1000mimickinglistpert.json")
+
+
+
+def mimickingpertids(infile, outfile):
+    
+    with open(infile) as infile2:
+        l1000mimickingsignatures2 = json.load(infile2)
+
+
+
+    list_pertids = []
+
+    for key in list(l1000mimickingsignatures2.keys()):
+        for item in l1000mimickingsignatures2[key]:
+            pert_id = item['pert_id']
+            list_pertids.append(pert_id)
+
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(list_pertids, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
+
+ 
+
+
+######################################################################
+########## 5. Getting p-value for each perturbation--mimicking drugs
+######################################################################
+
+
+@transform(L1000mimickingtop50,
+            suffix('_L1000mimickingtop50ids.json'),
+            "_L1000mimickinglistpval.json")
+
+
+def mimickingpvals(infile, outfile):
+    
+    with open(infile) as infile2:
+        l1000mimickingtop502 = json.load(infile2)
+
+    list_pvals2 = []
+    for key in list(l1000mimickingtop502.keys()):
+        for item in l1000mimickingtop502[key]['similar']:
+            pval = item["pvals"]
+            list_pvals2.append(pval)
+    
+        
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(list_pvals2, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
+
+
+
+################################################################################################
+########## 6. Making dictionary and dataframe of perturbation ids and p-values--mimicking drugs
+################################################################################################
+
+
+
+
+
+
+
+##########################################################
+##########################################################
+########## S7. Heatmap/Clustermap of Drugs from L1000fwd
+##########################################################
+##########################################################
+
+##### Takes dataframe of perturbation ids and their p-values and makes heatmap/clustergram (separate for reversing and mimicking) of drugs from L1000fwd based on p-value.
+### Input: Dataframe of perturbation ids and their p-values.
+### Output: 2 heatmaps--based on p-value, one for reversing and one for mimicking, drugs currently used/approved for ovarian cancer are colored differently.
 
 ##############################################################
-########## 1. Getting single singature by id--reversing drugs
+########## 1. testing out heatmap--reversing drugs
 ###############################################################
+
+@transform(testdf,
+            suffix('_L1000_testdf.csv'),
+            "_L1000_clustermap.png")
+
+
+def clustermaptest(infile, outfile):
+
+    df2 = pd.read_table(infile)
+    # df2["pvals"] = np.log10(df2["pvals"] + 1)
+
+    # fig, ax = plt.subplots(figsize=(20,10))
+    clustermap = sns.clustermap(np.log10(df2+1), z_score=0, cmap="RdBu_r")
+
+    # clustermap2 = clustermap.get_figure()
+    # clustermap2.savefig(outfile, dpi=400)
