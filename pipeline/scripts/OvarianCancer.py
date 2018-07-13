@@ -154,7 +154,7 @@ def L1000reversingresultids(infile, outfile):
         signature_data = json.load(infile2)
 
     # Loop through dictionary
-    for sample in signature_data.items():
+    for sample, genesets in signature_data.items():
 
         payload = {
             # put downregulated genes in the upregulated spot to find drugs that reverse the signature
@@ -251,10 +251,10 @@ def L1000mimickingresultids(infile, outfile):
 
 @transform(L1000reversingresultids,
             suffix('_L1000reversingresultids.json'),
-            "_L1000reversingtop50ids.json")
+            "_L1000top50ids.json")
 
 
-def L1000reversingtop50(infile, outfile):
+def L1000top50(infile, outfile):
     
     import json, requests
     from pprint import pprint
@@ -268,6 +268,7 @@ def L1000reversingtop50(infile, outfile):
     
     
     L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+    # L1000FWD_URL = 'http://146.203.54.243:31278/custom/SigineDMOA'
     
     
     for k in l1000reversingresultids2:
@@ -291,382 +292,171 @@ def L1000reversingtop50(infile, outfile):
     f.close()
 
 
+######################################################################
+########## 2. Making top 50 results nested dictionary into dataframe
+######################################################################
 
 
-########################################################################
-########## 2. Top 50 signature ids for mimicking drugs for each sample
-#######################################################################
-@transform(L1000mimickingresultids,
-            suffix('_L1000mimickingresultids.json'),
-            "_L1000mimickingtop50ids.json")
+@transform(L1000top50,
+            suffix('_L1000top50ids.json'),
+            "_L1000_df_signature_ids.txt")
 
 
-def L1000mimickingtop50(infile, outfile):
+def signatureids_todf(infile, outfile):
     
     import json, requests
     from pprint import pprint
 
     with open(infile) as infile2:
-        l1000mimickingresultids2 = json.load(infile2)
+        top50_dict = json.load(infile2)
+
+
+    temp_df_signatureids = pd.DataFrame(top50_dict).T
+
+    df_list = []
+
+    for sample, rowdata in temp_df_signatureids.iterrows(): # row id is sample, other data is rowdata
+        for direction in ["similar", "opposite"]:
+            df = pd.DataFrame(rowdata[direction])
+            df["direction"] = direction
+            df["sample"] = sample
+            df_list.append(df)
+    df_signatureids = pd.concat(df_list)
+
+    df_signatureids2 = df_signatureids.set_index("sig_id")
     
+    df_signatureids2.to_csv(outfile, sep="\t")
+
+
+
+
+
+
+################################################################
+################################################################
+########## S5. L1000fwd Get Single Signature by Signature ID
+################################################################
+################################################################
+
+##### Takes L1000fwd top 50 signature ids for each sample and ouputs signature--stored in nested dictionary, which is later made into a dataframe.
+### Input: Dataframe of the L1000fwd top 50 signatue ids for each sample.
+### Outputs: Nested dictionary of drug signatures for each sample and dataframe of drug signatures.
+
+##############################################################
+########## 1. Getting single singature by id
+##############################################################
+
+@transform(signatureids_todf,
+            suffix('_L1000_df_signature_ids.txt'),
+            "_L1000drugsignatures.json")
+
+
+def L1000drugsignatures(infile, outfile):
     
-    # create empty dictionary
-    l1000_mimicking_top50 = {}
-    
-    
+    import json, requests
+    from pprint import pprint
+
     L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+
+    df_sigids = pd.read_table(infile)
     
-    
-    for k in l1000mimickingresultids2:
-        result_id = str(l1000mimickingresultids2[k])
-        result_id_edited = result_id[15:39] # getting just result id from string
-        
-        response = requests.get(L1000FWD_URL + 'result/topn/' + result_id_edited)
-        
+    list_sigids = list(df_sigids["sig_id"])
+
+    dict_drugsignatures = {}
+
+    for signature_id in list_sigids:
+        response = requests.get(L1000FWD_URL + 'sig/' + signature_id)
         if response.status_code == 200:
-            l1000_mimicking_top50[k] = response.json() # adding top 50 results to dictionary
-            json.dump(response.json(), open('api4_result.json', 'w'), indent=4)
+            dict_drugsignatures[signature_id] = (response.json())
+#       json.dump(response.json(), open('api2_result.json', 'w'), indent=4)
 
 
     # open file
     f = open(outfile, 'w')
 
     # write to file
-    f.write(json.dumps(l1000_mimicking_top50, ensure_ascii=False, indent=4))
+    f.write(json.dumps(dict_drugsignatures, ensure_ascii=False, indent=4))
 
     # close file
     f.close()
 
 
+###################################################################
+########## 2. Converting signature nested dictionary to dataframe
+###################################################################
+
+@transform(L1000drugsignatures,
+            suffix('_L1000drugsignatures.json'),
+            "_L1000_df_drugsignature.txt")
 
 
-#####################################################################################################
-#####################################################################################################
-########## S5. L1000fwd Get Single Signature by Signature ID and Get Perturbation ID from Signature.
-#####################################################################################################
-#####################################################################################################
-
-##### Takes L1000fwd top 50 signature ids for each sample and ouputs signature and then retrives perturbation id from signature,
-##### as well as perturbation p-value, which is found in top 50 results dictionary. Done for both reversing and mimicking drugs.
-### Input: Dictionary of the L1000fwd top 50 signatue ids for each sample.
-### Output: Nested dictionary of drug signatures for each sample and dictionary of perturbation ids and their p-values.
-
-##############################################################
-########## 1. Getting single singature by id--reversing drugs
-##############################################################
-
-@transform(L1000reversingtop50,
-            suffix('_L1000reversingtop50ids.json'),
-            "_L1000reversingsignatures.json")
-
-
-def L1000reversingdrugsignatures(infile, outfile):
-    
-    import json, requests
-    from pprint import pprint
-
-    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+def drugsignature_todf(infile, outfile):
 
     with open(infile) as infile2:
-        l1000reversingtop50ids2 = json.load(infile2)
+        drugsignatures_dict = json.load(infile2)
 
-    # create empty dictionary
-    l1000_reversing_signatures_fromid = {}
+    df_drugsignatures = pd.DataFrame(drugsignatures_dict).T
 
-
-    # looping through each key (sample id)
-    for key in list(l1000reversingtop50ids2.keys()):
-        list_sig_ids = []
-
-        # looping through each signature id for each sample in the "similar" drugs category 
-        for item in l1000reversingtop50ids2[key]["similar"]: 
-            sig_id = (item['sig_id'])
-            response = requests.get(L1000FWD_URL + 'sig/' + sig_id)
-
-            if response.status_code == 200:
-                list_sig_ids.append(response.json())
-                json.dump(response.json(), open('api2_result.json', 'w'), indent=4)
-        
-        l1000_reversing_signatures_fromid[key] = list_sig_ids
+    df_drugsignatures.to_csv(outfile, sep="\t")
 
 
-    # open file
-    f = open(outfile, 'w')
 
-    # write to file
-    f.write(json.dumps(l1000_reversing_signatures_fromid, ensure_ascii=False, indent=4))
+#####################################################################################################
+#####################################################################################################
+########## S6. Merging Dataframes of Drug Signatures and Signature Ids.
+#####################################################################################################
+#####################################################################################################
 
-    # close file
-    f.close()
+##### Merging the dataframes of signature ids and drug signatures, using signature id (sig_id) as the index.
+### Inputs: Dataframe of signature ids (from top 50 results) and drug signatures.
+### Output: Merged dataframe of the two input dataframes with the signature id (sig_id) as the index.
+
+######################################################################
+########## 1. Merging the dataframes
+######################################################################
 
 
+@transform(drugsignature_todf,
+            suffix('_L1000_df_drugsignature.txt'),
+            add_inputs(signatureids_todf),
+            "_L1000_drugsig_sigids_merged.txt")
+
+
+def mergeddfs(infiles, outfile):
+    print(infiles)
+    # split(infiles)
+    signature_file, id_file = infiles
+
+
+
+    df_sig_ids = pd.read_table(id_file)
+    df_drugsignatures = pd.read_table(signature_file)
+
+
+    df_merged = df_sig_ids.merge(df_drugsignatures, on = "sig_id")
+
+    df_merged.to_csv(outfile, sep="\t")
+
+
+
+
+
+#########################################
+#########################################
+########## S7. Plotting
+#########################################
+#########################################
+
+# ##### Takes dataframe of signatures and signature ids and makes various plots using seaborn.
+# ### Input: Dataframe of signatures and signature ids.
+# ### Output: Various plots 
 
 # ##############################################################
-# ########## 2. Getting single singature by id--mimicking drugs
-# ##############################################################
-
-@transform(L1000mimickingtop50,
-            suffix('_L1000mimickingtop50ids.json'),
-            "_L1000mimickingsignatures.json")
-
-
-def L1000mimickingdrugsignatures(infile, outfile):
-    
-    import json, requests
-    from pprint import pprint
-
-    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
-
-    with open(infile) as infile2:
-        l1000mimickingtop50ids2 = json.load(infile2)
-
-    # create empty dictionary
-    l1000_mimicking_signatures_fromid = {}
-
-
-    # looping through each key (sample id)
-    for key in list(l1000mimickingtop50ids2.keys()):
-        list_sig_ids = []
-
-        # looping through each signature id for each sample in the "similar" drugs category 
-        for item in l1000mimickingtop50ids2[key]["similar"]: 
-            sig_id = (item['sig_id'])
-            response = requests.get(L1000FWD_URL + 'sig/' + sig_id)
-
-            if response.status_code == 200:
-                list_sig_ids.append(response.json())
-                json.dump(response.json(), open('api2_result.json', 'w'), indent=4)
-        
-        l1000_mimicking_signatures_fromid[key] = list_sig_ids
-
-
-    # open file
-    f = open(outfile, 'w')
-
-    # write to file
-    f.write(json.dumps(l1000_mimicking_signatures_fromid, ensure_ascii=False, indent=4))
-
-    # close file
-    f.close()
-
-
-
-
-
-
-
-#####################################################################################################
-#####################################################################################################
-########## S6. L1000fwd Get Perturbation ID from Signature and P-value for each Perturbation.
-#####################################################################################################
-#####################################################################################################
-
-##### From signature, extract perturbation id and from top 50 results dictionary, extract perturbation p-value. Done for both reversing and mimicking.
-### Inputs: Nested dictionary of the L1000fwd top 50 signatue ids for each sample and nested dictionary of the L1000fwd signatures for each sample.
-### Output: Dictionary of perturbation ids (key) and p-value for each perturbation id (value).
-
-######################################################################
-########## 1. Getting perturbation id from signature--reversing drugs
-######################################################################
-
-
-@transform(L1000reversingdrugsignatures,
-            suffix('_L1000reversingsignatures.json'),
-            "_L1000reversinglistpert.json")
-
-
-
-def reversingpertids(infile, outfile):
-    
-    with open(infile) as infile2:
-        l1000reversingsignatures2 = json.load(infile2)
-
-
-
-    list_pertids = []
-
-    for key in list(l1000reversingsignatures2.keys()):
-        for item in l1000reversingsignatures2[key]:
-            pert_id = item['pert_id']
-            list_pertids.append(pert_id)
-
-    # open file
-    f = open(outfile, 'w')
-
-    # write to file
-    f.write(json.dumps(list_pertids, ensure_ascii=False, indent=4))
-
-    # close file
-    f.close()
-
-
-
-
-######################################################################
-########## 2. Getting p-value for each perturbation--reversing drugs
-######################################################################
-
-
-@transform(L1000reversingtop50,
-            suffix('_L1000reversingtop50ids.json'),
-            "_L1000reversinglistpval.json")
-
-
-def reversingpvals(infile, outfile):
-    
-    with open(infile) as infile2:
-        l1000reversingtop502 = json.load(infile2)
-
-    list_pvals2 = []
-    for key in list(l1000reversingtop502.keys()):
-        for item in l1000reversingtop502[key]['similar']:
-            pval = item["pvals"]
-            list_pvals2.append(pval)
-    
-        
-    # open file
-    f = open(outfile, 'w')
-
-    # write to file
-    f.write(json.dumps(list_pvals2, ensure_ascii=False, indent=4))
-
-    # close file
-    f.close()
-
-
-
-################################################################################################
-########## 3. Making dictionary and dataframe of perturbation ids and p-values--reversing drugs
-################################################################################################
-
-
-@transform([reversingpertids, reversingpvals], regex('_L1000reversinglistp....json'),
-            "_L1000_testdf.csv")
-
-
-def testdf(infiles, outfile):
-    
-    pertids2 = json.loads(open("rawdata/TCGA-OV-fpkm-uq_L1000reversinglistpert.json").read())
-    pvals2 = json.loads(open("rawdata/TCGA-OV-fpkm-uq_L1000reversinglistpval.json").read())
-
-    # array_test = [pertids2, pvals2]
-    # clustermap = sns.clustermap(np.log10(array_test+1), z_score=0, cmap="RdBu_r")
-
-
-
-    # dict_pert_pval = dict(zip(pertids2, pvals2))
-    
-
-    df_pertids_pvals = pd.DataFrame() 
-
-
-    df_pertids_pvals['pert_ids'] = pertids2
-
-    df_pertids_pvals["pvals"] = pvals2
-
-    # df_pertids_pvals.set_index('pert_ids')
-
-   # Save df to outfile
-    df_pertids_pvals.to_csv(outfile, sep='\t')  
-
-
-
-######################################################################
-########## 4. Getting perturbation id from signature--mimicking drugs
-######################################################################
-
-
-@transform(L1000mimickingdrugsignatures,
-            suffix('_L1000mimickingsignatures.json'),
-            "_L1000mimickinglistpert.json")
-
-
-
-def mimickingpertids(infile, outfile):
-    
-    with open(infile) as infile2:
-        l1000mimickingsignatures2 = json.load(infile2)
-
-
-
-    list_pertids = []
-
-    for key in list(l1000mimickingsignatures2.keys()):
-        for item in l1000mimickingsignatures2[key]:
-            pert_id = item['pert_id']
-            list_pertids.append(pert_id)
-
-    # open file
-    f = open(outfile, 'w')
-
-    # write to file
-    f.write(json.dumps(list_pertids, ensure_ascii=False, indent=4))
-
-    # close file
-    f.close()
-
- 
-
-
-######################################################################
-########## 5. Getting p-value for each perturbation--mimicking drugs
-######################################################################
-
-
-@transform(L1000mimickingtop50,
-            suffix('_L1000mimickingtop50ids.json'),
-            "_L1000mimickinglistpval.json")
-
-
-def mimickingpvals(infile, outfile):
-    
-    with open(infile) as infile2:
-        l1000mimickingtop502 = json.load(infile2)
-
-    list_pvals2 = []
-    for key in list(l1000mimickingtop502.keys()):
-        for item in l1000mimickingtop502[key]['similar']:
-            pval = item["pvals"]
-            list_pvals2.append(pval)
-    
-        
-    # open file
-    f = open(outfile, 'w')
-
-    # write to file
-    f.write(json.dumps(list_pvals2, ensure_ascii=False, indent=4))
-
-    # close file
-    f.close()
-
-
-
-################################################################################################
-########## 6. Making dictionary and dataframe of perturbation ids and p-values--mimicking drugs
-################################################################################################
-
-
-
-
-
-
-
-##########################################################
-##########################################################
-########## S7. Heatmap/Clustermap of Drugs from L1000fwd
-##########################################################
-##########################################################
-
-##### Takes dataframe of perturbation ids and their p-values and makes heatmap/clustergram (separate for reversing and mimicking) of drugs from L1000fwd based on p-value.
-### Input: Dataframe of perturbation ids and their p-values.
-### Output: 2 heatmaps--based on p-value, one for reversing and one for mimicking, drugs currently used/approved for ovarian cancer are colored differently.
-
-##############################################################
-########## 1. testing out heatmap--reversing drugs
-###############################################################
-
-@transform(testdf,
-            suffix('_L1000_testdf.csv'),
+# ########## 1. testing out clustermap--reversing drugs
+# ###############################################################
+
+@transform(mergeddfs,
+            suffix('_L10000_drugsig_sigids_merged.csv'),
             "_L1000_clustermap.png")
 
 
