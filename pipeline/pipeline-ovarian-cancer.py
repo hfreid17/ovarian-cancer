@@ -601,32 +601,60 @@ def test(infile):
 @transform(zscore,
             suffix('_zscore.txt'),
             "_chea.txt")
-def cheaJobs(infile, outfiles):
-    yield ['rawdata', 'test.txt']
 
-    # infile = "/rawdata/TCGA-OV-fpkm-uq_signatures.json"
+def runChea(infile, outfile):
 
-    with open(infile) as infile2:
-        gene_sig = json.load(infile2)
+    # making dictionary of top 300 most differentially expressed genes for each sample
+    df_zscore = pd.read_table(infile).set_index("gene_symbol")
 
-    df_gene_sig = pd.DataFrame(gene_sig)
+    df_zscore_abs = df_zscore.abs()
 
-    # code to generate file names--given as jobs to 
+    dict_signatures_300 = {}
 
-    # making df where up and down genes are not separated
-    df_gene_sig_combined = pd.DataFrame()
-    for column in df_gene_sig:
-        list_bottom = df_gene_sig[column]["bottom"]
-        list_top = df_gene_sig[column]["top"]
-        list_sample = list_bottom + list_top
-        df_gene_sig_combined[column] = list_sample 
+    for sample in df_zscore.columns:
+        col = df_zscore_abs[sample].sort_values(ascending=False) # sort values in decreasing order
+        dict_signatures_300[sample] = col.index[:300]
+    
+
+    # looping through dictionary to query chea3
+    dict_chearesults = {}
+
+    list_onesample = dict_signatures_300["TCGA-04-1331-01"]
+    tcga_sample = "TCGA-04-1331-01"
+    
+    # for tcga_sample, geneset_forchea in dict_signatures_300.items():
+    chea_results_r = r.Rrun_chea(list_onesample)
+    chea_results_df = pandas2ri.ri2py(chea_results_r)
+
+    chea_results_df.to_csv(outfile, sep = "\t")
+
+
+# def cheaJobs(infile, outfiles):
+#     yield ['rawdata', 'test.txt']
+
+#     # # infile = "/rawdata/TCGA-OV-fpkm-uq_signatures.json"
+
+    # with open(infile) as infile2:
+    #     gene_sig = json.load(infile2)
+
+    # df_gene_sig = pd.DataFrame(gene_sig)
+
+    # # code to generate file names--given as jobs to 
+
+    # # making df where up and down genes are not separated
+    # df_gene_sig_combined = pd.DataFrame()
+    # for column in df_gene_sig:
+    #     list_bottom = df_gene_sig[column]["bottom"]
+    #     list_top = df_gene_sig[column]["top"]
+    #     list_sample = list_bottom + list_top
+    #     df_gene_sig_combined[column] = list_sample 
 
     
-    # for loop for querying chea3
-    for column in df_gene_sig_combined:
-        # make each column into a list and then into a character array--is it already a char array?
-        list_genes_column = df_gene_sig_combined[column]
-        runChea(list_genes_column, column_chea3.txt)
+    # # for loop for querying chea3
+    # for column in df_gene_sig_combined:
+    #     # make each column into a list and then into a character array--is it already a char array?
+    #     list_genes_column = df_gene_sig_combined[column]
+    #     runChea(list_genes_column, column_chea3.txt)
 
 
         # # open file
@@ -644,15 +672,6 @@ def cheaJobs(infile, outfiles):
     # yield command passes info to jobs
     # input is always the json file
     # output--has name of sample id
-
-
-
-@files(cheaJobs)
-
-def runChea(infile, outfile):
-    
-    R_path = "R/chea_query_function.R"
-
 
 
 
