@@ -35,7 +35,10 @@ fpkm_file = "rawdata/TCGA-OV-fpkm-uq.txt"
 
 
 ##### 2. R Connection #####
+from rpy2.robjects import r, pandas2ri
+pandas2ri.activate()
 r.source('pipeline/scripts/ovarian-cancer.R')
+
 
 
 ########################################################
@@ -572,3 +575,91 @@ def clustermaptest(infile, outfile):
 
     # clustermap2 = clustermap.get_figure()
     # clustermap2.savefig(outfile, dpi=400)
+
+@originate(None)
+def test(infile):
+    r.r_function(['this', 'is', 'alist'])
+
+
+
+
+
+#########################################
+#########################################
+########## S8. Chea3
+#########################################
+#########################################
+
+# ##### Takes dataframe of signatures and signature ids and makes various plots using seaborn.
+# ### Input: Dataframe of signatures and signature ids.
+# ### Output: Various plots 
+
+# ##############################################################
+# ########## 1. 
+# ###############################################################
+
+@transform(zscore,
+            suffix('_zscore.txt'),
+            "_chea.txt")
+def cheaJobs(infile, outfiles):
+    yield ['rawdata', 'test.txt']
+
+    # infile = "/rawdata/TCGA-OV-fpkm-uq_signatures.json"
+
+    with open(infile) as infile2:
+        gene_sig = json.load(infile2)
+
+    df_gene_sig = pd.DataFrame(gene_sig)
+
+    # code to generate file names--given as jobs to 
+
+    # making df where up and down genes are not separated
+    df_gene_sig_combined = pd.DataFrame()
+    for column in df_gene_sig:
+        list_bottom = df_gene_sig[column]["bottom"]
+        list_top = df_gene_sig[column]["top"]
+        list_sample = list_bottom + list_top
+        df_gene_sig_combined[column] = list_sample 
+
+    
+    # for loop for querying chea3
+    for column in df_gene_sig_combined:
+        # make each column into a list and then into a character array--is it already a char array?
+        list_genes_column = df_gene_sig_combined[column]
+        runChea(list_genes_column, column_chea3.txt)
+
+
+        # # open file
+        # f = open(outfiles, 'w')
+        # # write to file
+        # f.write(json.dumps(list_genes_column, ensure_ascii=False, indent=4))
+        # # close file
+        # f.close()
+
+        
+        
+
+
+    # read in json, for loop, for each sample--output file with chea results, can run jobs in parallel, 
+    # yield command passes info to jobs
+    # input is always the json file
+    # output--has name of sample id
+
+
+
+@files(cheaJobs)
+
+def runChea(infile, outfile):
+    
+    R_path = "R/chea_query_function.R"
+
+
+
+
+##################################################
+##################################################
+########## Run pipeline
+##################################################
+##################################################
+pipeline_run([sys.argv[-1]], multiprocess=1, verbose=1)
+print('Done!')

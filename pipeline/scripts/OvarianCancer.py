@@ -401,9 +401,104 @@ def drugsignature_todf(infile, outfile):
 
 
 
+
+
+
+##########################################
+#########################################
+########## S6. Finding MOA of Drugs
+########################################
+########################################
+
+##### Merging the dataframes of signature ids and drug signatures, using signature id (sig_id) as the index.
+### Input: Dataframe of drug signatures.
+### Outputs: Dictionary and dtaframe of drugs and their MOAs.
+
+##############################################################
+########## 1. Searching L1000fwd for MOA--creating dictionary
+##############################################################
+
+@transform(drugsignature_todf,
+            suffix('_L1000_df_drugsignature.txt'),
+            "_L1000_dict_MOA.json")
+
+
+def L1000MOA(infile, outfile):
+
+    import json, requests
+    from pprint import pprint
+    
+    df_signatures_temp = pd.read_table(infile)
+
+    list_pertid = (df_signatures_temp["pert_id"]).tolist()
+    list_pertid_short = list_pertid[0:5]
+
+    dict_MOA = {}
+
+    L1000FWD_URL = 'http://amp.pharm.mssm.edu/dmoa/report/'
+
+    for item in list_pertid_short:
+        id_brd = item
+        response = requests.get(L1000FWD_URL + id_brd + "/json")
+
+        if response.status_code == 200:
+            dict_MOA[item] = response.json()
+            json.dump(response.json(), open('api1_result.json', 'w'), indent=4)
+    
+
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(dict_MOA, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
+
+###################################################################
+########## 2. Converting MOA dictionary to dataframe
+###################################################################
+
+# @transform(L1000MOA,
+#             suffix('_L1000drugsignatures.json'),
+#             "_L1000_df_drugsignature.txt")
+
+
+# def MOA_todf(infile, outfile):
+
+#      with open("rawdata/TCGA-OV-fpkm-uq_L1000top50ids.json") as infile2:
+#         top50_dict2 = json.load(infile2)
+
+#     list_samples = top50_dict2.keys()
+
+#     df_MOA = pd.DataFrame()
+#     df_MOA["pert_id"] = list_pertid
+#     df_MOA["MOA"] = list_MOA
+#     df_MOA["sample"] = list_samples
+#     df_MOA.set_index("sample")
+
+#     df_drugsignatures = pd.DataFrame(drugsignatures_dict).T
+
+#     df_drugsignatures.to_csv(outfile, sep="\t")
+
+
+
+
+
+
 #####################################################################################################
 #####################################################################################################
-########## S6. Merging Dataframes of Drug Signatures and Signature Ids.
+########## S7. Clustermap of MOAs of Drugs
+#####################################################################################################
+#####################################################################################################
+
+
+
+
+
+#####################################################################################################
+#####################################################################################################
+########## S7. Merging Dataframes of Drug Signatures and Signature Ids.
 #####################################################################################################
 #####################################################################################################
 
@@ -443,7 +538,7 @@ def mergeddfs(infiles, outfile):
 
 #########################################
 #########################################
-########## S7. Plotting
+########## S8. Plotting
 #########################################
 #########################################
 

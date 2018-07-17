@@ -1,0 +1,4 @@
+rawdata
+*.sqlite
+*.json
+*.pyc
