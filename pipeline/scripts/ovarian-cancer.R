@@ -22,11 +22,11 @@
 ########## 1. 
 #############################################
 
-Rrun_chea <- function(input1, input2) {
+Rrun_chea <- function(input1, input2, library) {
     
     
     chea_result = chea3::queryChea(geneset = input1, set_name = input2, n_results = "all", background= 20000)
-    chea_result2 = chea_result[["integrated"]]
+    chea_result2 = chea_result[[library]]
 
     
     

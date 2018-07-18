@@ -586,27 +586,28 @@ def test(infile):
 
 #########################################
 #########################################
-########## S8. Chea3
+########## S8. Chea3 Queries
 #########################################
 #########################################
 
-# ##### Takes dataframe of signatures and signature ids and makes various plots using seaborn.
-# ### Input: Dataframe of signatures and signature ids.
-# ### Output: Various plots 
+# ##### Takes z-scored expression data and queries chea3 (transformation into TF).
+# ### Input: Zscored expression data.
+# ### Output: Separate files of TF from chea3 queries for each sample.
 
-# ##############################################################
-# ########## 1. 
-# ###############################################################
+# ###############################
+# ########## 1. Query Chea3
+# ###############################
 
 import glob
 
-@follows(mkdir("chea.dir"))
+@mkdir("rawdata/chea.dir")
 
-@transform(zscore,
-            suffix('_zscore.txt'),
-            glob.glob("chea.dir/*_chea.txt")) # is this the right way to do this--files didn't go to the right folder
+@subdivide(zscore,
+        formatter(),
+        'rawdata/chea.dir/*_chea.txt',
+        'rawdata/chea.dir/')
 
-def runChea(infile, outfile):
+def runChea(infile, outfiles, outfile_root):
 
     # making dictionary of top 300 most differentially expressed genes for each sample
     df_zscore = pd.read_table(infile).set_index("gene_symbol")
@@ -622,68 +623,116 @@ def runChea(infile, outfile):
 
     # looping through samples to query chea3
     for tcga_sample, geneset_forchea in dict_signatures_300.items():
-        outfile = "%s_chea.txt" %tcga_sample
-        chea_results_r = r.Rrun_chea(geneset_forchea, tcga_sample)
+        print('Doing {tcga_sample}...'.format(**locals()))
+        outfile = '{outfile_root}{tcga_sample}_chea.txt'.format(**locals())
+        chea_results_r = r.Rrun_chea(geneset_forchea, tcga_sample, library="ReMap")
         chea_results_df = pandas2ri.ri2py(chea_results_r)
         chea_results_df.to_csv(outfile, sep = "\t")
 
-
-
-
-
-    # list_onesample = dict_signatures_300["TCGA-04-1331-01"]
-    # tcga_sample = "TCGA-04-1331-01"
     
-    # # for tcga_sample, geneset_forchea in dict_signatures_300.items():
-    # chea_results_r = r.Rrun_chea(list_onesample)
-    # chea_results_df = pandas2ri.ri2py(chea_results_r)
-
-    # chea_results_df.to_csv(outfile, sep = "\t")
 
 
-# def cheaJobs(infile, outfiles):
-#     yield ['rawdata', 'test.txt']
 
-#     # # infile = "/rawdata/TCGA-OV-fpkm-uq_signatures.json"
 
-    # with open(infile) as infile2:
-    #     gene_sig = json.load(infile2)
+#########################################
+#########################################
+########## S9. Chea3 Analysis
+#########################################
+#########################################
 
-    # df_gene_sig = pd.DataFrame(gene_sig)
+# ##### 
+# ### Input:
+# ### Output: 
 
-    # # code to generate file names--given as jobs to 
+# #########################################
+# ########## 1. Convert to tf space
+# #########################################
 
-    # # making df where up and down genes are not separated
-    # df_gene_sig_combined = pd.DataFrame()
-    # for column in df_gene_sig:
-    #     list_bottom = df_gene_sig[column]["bottom"]
-    #     list_top = df_gene_sig[column]["top"]
-    #     list_sample = list_bottom + list_top
-    #     df_gene_sig_combined[column] = list_sample 
+# 
+
+
+
+
+# @transform(runChea,
+#             regex('chea2.dir/*_chea.txt'), # is this the right way to do this?
+#             "TFcounts.json")
+
+# def countTF(infiles, outfile):
+
+#     list_TFs = []
+
+#     # creating master list of TFs
+#     for file in infiles:
+#         temp_df = pd.read_table(file)
+#         list_TFs.append(temp_df["TF"])
+    
+#     # counting occurrances of each TF
+#     dict_TFcounts = {}
+#     for item in list_TFs:
+#         count = 0
+#         for item2 in list_TFs:
+#             if item == item2:
+#                 count += 1
+#             dict_TFcounts[item] = count
 
     
-    # # for loop for querying chea3
-    # for column in df_gene_sig_combined:
-    #     # make each column into a list and then into a character array--is it already a char array?
-    #     list_genes_column = df_gene_sig_combined[column]
-    #     runChea(list_genes_column, column_chea3.txt)
+#     # open file
+#     f = open(outfile, 'w')
+
+#     # write to file
+#     f.write(json.dumps(dict_TFcounts, ensure_ascii=False, indent=4))
+
+#     # close file
+#     f.close()
 
 
-        # # open file
-        # f = open(outfiles, 'w')
-        # # write to file
-        # f.write(json.dumps(list_genes_column, ensure_ascii=False, indent=4))
-        # # close file
-        # f.close()
+    
 
-        
-        
+# # #########################################
+# # ########## 2. TF survival analysis
+# # #########################################
+
+# @transform(runChea,
+#             regex('chea2.dir/*_chea.txt'), # is this the right way to do this?
+#             "??")
+
+# def countTF(infiles, outfile):
+
+#     df_tfs_sample = pd.DataFrame()
+    
+#     for file in infiles:
+#         temp_df = pd.read_table(file)
+#         list_TFs_temp = temp_df["TF"]
+#         list_samplename = temp_df["set1"]
+#         samplename = list_samplename[1]
+#         samplename = samplename[0:12] # this may need to be 11?
+#         df_tfs_sample[samplename] = list_TFs_temp
+
+#     df_tfs_sample = df_tfs_sample.T
+
+#     df_survival = pd.read_table(PATH??)
+
+#     # add column label for submitter id for df_tfs_sample--call it "patient_barcode"
+
+#     df_survival_TF = df_tfs_sample.merge(df_survival, how="inner", on="patient_barcode" )
 
 
-    # read in json, for loop, for each sample--output file with chea results, can run jobs in parallel, 
-    # yield command passes info to jobs
-    # input is always the json file
-    # output--has name of sample id
+
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
 
 
 
