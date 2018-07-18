@@ -598,9 +598,13 @@ def test(infile):
 # ########## 1. 
 # ###############################################################
 
+import glob
+
+@follows(mkdir("chea.dir"))
+
 @transform(zscore,
             suffix('_zscore.txt'),
-            "_chea.txt")
+            glob.glob("chea.dir/*_chea.txt")) # is this the right way to do this--files didn't go to the right folder
 
 def runChea(infile, outfile):
 
@@ -616,17 +620,25 @@ def runChea(infile, outfile):
         dict_signatures_300[sample] = col.index[:300]
     
 
-    # looping through dictionary to query chea3
-    dict_chearesults = {}
+    # looping through samples to query chea3
+    for tcga_sample, geneset_forchea in dict_signatures_300.items():
+        outfile = "%s_chea.txt" %tcga_sample
+        chea_results_r = r.Rrun_chea(geneset_forchea, tcga_sample)
+        chea_results_df = pandas2ri.ri2py(chea_results_r)
+        chea_results_df.to_csv(outfile, sep = "\t")
 
-    list_onesample = dict_signatures_300["TCGA-04-1331-01"]
-    tcga_sample = "TCGA-04-1331-01"
+
+
+
+
+    # list_onesample = dict_signatures_300["TCGA-04-1331-01"]
+    # tcga_sample = "TCGA-04-1331-01"
     
-    # for tcga_sample, geneset_forchea in dict_signatures_300.items():
-    chea_results_r = r.Rrun_chea(list_onesample)
-    chea_results_df = pandas2ri.ri2py(chea_results_r)
+    # # for tcga_sample, geneset_forchea in dict_signatures_300.items():
+    # chea_results_r = r.Rrun_chea(list_onesample)
+    # chea_results_df = pandas2ri.ri2py(chea_results_r)
 
-    chea_results_df.to_csv(outfile, sep = "\t")
+    # chea_results_df.to_csv(outfile, sep = "\t")
 
 
 # def cheaJobs(infile, outfiles):

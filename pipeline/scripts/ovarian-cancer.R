@@ -22,11 +22,19 @@
 ########## 1. 
 #############################################
 
-r_function <- function(input) {
-    print(input)
-    print(typeof(input))
-    print(unlist(input))
-    print(typeof(unlist(input)))
+Rrun_chea <- function(input1, input2) {
+    
+    
+    chea_result = chea3::queryChea(geneset = input1, set_name = input2, n_results = "all", background= 20000)
+    chea_result2 = chea_result[["integrated"]]
+
+    
+    
+    
+    
+    
+    # print(unlist(input))
+    
 }
 
 #######################################################
