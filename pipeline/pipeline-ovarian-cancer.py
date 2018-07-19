@@ -19,6 +19,7 @@ import scipy.stats as ss
 import json
 import matplotlib.pyplot as plt
 import seaborn as sns
+import glob
 
 ##### 2. Custom modules #####
 # Pipeline running
@@ -598,8 +599,6 @@ def test(infile):
 # ########## 1. Query Chea3
 # ###############################
 
-import glob
-
 @mkdir("rawdata/chea.dir")
 
 @subdivide(zscore,
@@ -645,15 +644,47 @@ def runChea(infile, outfiles, outfile_root):
 # ### Output: 
 
 # #########################################
-# ########## 1. Convert to tf space
+# ########## 1. Converting to TF space
 # #########################################
 
-# 
+
+# @merge(runChea, 
+#         glob.glob("rawdata/chea.dir/*"),
+#         "rawdata/tfspace.txt")
+
+@merge(runChea,
+        "rawdata/tfspace.txt")
+
+
+def transformation_toTF(infiles, outfile):
+
+
+    # make each df, use pivot, add to list of dfs, concatenate dfs in for loop
+
+    list_dfs = []
+
+    for infile in infiles:
+        temp_df = pd.read_table(infile)
+        temp_df2 = pd.DataFrame()
+        temp_df2["sample_id"] = temp_df["set1"]
+        temp_df2["TF"] = temp_df["TF"]
+        temp_df2["p_val"] = temp_df["FET.p.val"]
+        transformed_df = temp_df2.pivot(index = "sample_id", columns="TF", values = "p_val")
+        list_dfs.append(transformed_df)
+
+    df_final = pd.DataFrame()
+
+
+    for df in list_dfs:
+        df_final = pd.concat([df_final, df])
+    
+    df_final.to_csv(outfile, sep="\t")
+    
 
 
 
 
-# @transform(runChea,
+# @merge(runChea,
 #             regex('chea2.dir/*_chea.txt'), # is this the right way to do this?
 #             "TFcounts.json")
 
