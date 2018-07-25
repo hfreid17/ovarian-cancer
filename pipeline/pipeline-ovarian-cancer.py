@@ -496,17 +496,6 @@ def L1000MOA(infile, outfile):
 
 
 
-
-#####################################################################################################
-#####################################################################################################
-########## S7. Clustermap of MOAs of Drugs
-#####################################################################################################
-#####################################################################################################
-
-
-
-
-
 #####################################################################################################
 #####################################################################################################
 ########## S7. Merging Dataframes of Drug Signatures and Signature Ids.
@@ -753,11 +742,100 @@ def transformation_toTF(infiles, outfile):
 
 
     
+############################################
+############################################
+########## S10. Finding Combination Drugs
+############################################
+############################################
+
+# ##### Takes list of currently used ovarian cancer drugs (from Mt. Sinai EMR data) and predicts drug pairs for each of these drugs for each patient based on the patient's gene signature.
+# ### Input: List of currently used drugs, ovarian cancer patient's gene signatures.
+# ### Output: List of predicted drugs for each currently used drug for each patient.
+
+# #########################################
+# ########## 1. 
+# #########################################
+
+@transform(signatures,
+            suffix('_signatures.json'),
+            "???") ##multiple outfiles??
+
+
+def pairdrugs(infile, outfile):
+
+    import json, requests
+    from pprint import pprint
+
+    list_currentovdrugs = ["paclitaxel", "gemcitabine", "cisplatin", "doxorubicin", "topotecan", "docetaxel", "etoposide", "cyclophosphadmide", "ifosfamide", "irinotecan", "pemetrexed", "tamoxifen", ""]
+    
+    df_sigmetadata = pd.read_csv("/Users/maayanlab/Documents/Ovarian Cancer Project/ovarian-cancer/CD_signature_metadata.csv").set_index("sig_id")
+    
+    with open(infile) as infile2:
+        genesignatures = json.load(infile2)
+    
+    df_genesig = pd.DataFrame(genesignatures)
+
+    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+    
+    for drug in list_currentovdrugs:
+
+        # finding pertids for current ov cancer drugs to be used to find updated signature ids in metadata file
+
+        response = requests.get(L1000FWD_URL + 'synonyms/' + drug)
+        if response.status_code == 200:
+            dict_current_pertids = response.json()
+            json.dump(response.json(), open('api1_result.json', 'w'), indent=4)
+
+    
+
+        # finding updated signature ids from pertids for ov cancer drugs in metadata file
+
+        df_current_pertids = pd.DataFrame(dict_current_pertids)
+
+        list_current_pertids = list(df_current_pertids["pert_id"])
+
+        list_current_sigid_updated = []
+
+
+        for sig, rowdata in df_sigmetadata.iterrows():
+            temp_pertid = rowdata["pert_id"]
+            if temp_pertid in list_current_pertids:
+                list_current_sigid_updated.append(sig)
+
+    
+        # getting drug signature from l1000
+
+        dict_current_signatures = {}
+
+        for item in list_current_sigid_updated:
+            response = requests.get(L1000FWD_URL + 'sig/' + item)
+            if response.status_code == 200:
+                dict_current_signatures[item] = (response.json())
+                json.dump(response.json(), open('api2_result.json', 'w'), indent=4)
+
+        
+        
+        # converting nested dictionary of drug signatures to df
+
+        df_current_signatures = pd.DataFrame(dict_current_signatures).T
 
 
 
+        # extracting up and down genes for drug from df to be used for subtracting from each patient's signature
 
+        current_down = []
+        current_up = []
 
+        for sigid, rowdata in df_current_signatures.iterrows():
+            current_down_temp = rowdata["down_genes"]
+            current_up_temp = rowdata["up_genes"]
+            current_down = current_down + current_down_temp
+            current_up = current_up + current_up_temp
+
+        
+        for sample, rowdata in df_genesig.iterrows():
+            sample_bottom_temp = rowdata["bottom"]
+            sample_top_temp = rowdata["top"]
 
 
 
