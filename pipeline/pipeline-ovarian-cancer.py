@@ -20,6 +20,8 @@ import json
 import matplotlib.pyplot as plt
 import seaborn as sns
 import glob
+import requests
+
 
 ##### 2. Custom modules #####
 # Pipeline running
@@ -742,31 +744,34 @@ def transformation_toTF(infiles, outfile):
 
 
     
-############################################
-############################################
-########## S10. Finding Combination Drugs
-############################################
-############################################
+######################################################################
+######################################################################
+########## S10. Finding Combination Drugs--Updating Gene Signatures
+#####################################################################
+#####################################################################
 
-# ##### Takes list of currently used ovarian cancer drugs (from Mt. Sinai EMR data) and predicts drug pairs for each of these drugs for each patient based on the patient's gene signature.
-# ### Input: List of currently used drugs, ovarian cancer patient's gene signatures.
-# ### Output: List of predicted drugs for each currently used drug for each patient.
+# ##### Takes list of currently used ovarian cancer drugs (from Mt. Sinai EMR data) and updates gene signature for each sample based on genes affected/regulated by the currently used drugs.
+# ### Input: List of currently used drugs, ovarian cancer patient's gene signatures
+# ### Output: List of updated gene signatures for each sample (genes affected by currently used drugs are removed)
 
 # #########################################
 # ########## 1. 
 # #########################################
 
-@transform(signatures,
-            suffix('_signatures.json'),
-            "???") ##multiple outfiles??
+@mkdir("rawdata/combinationdrugs.dir")
+
+@subdivide(signatures,
+        formatter(),
+        'rawdata/combinationdrugs.dir/*_updatedsignatures.json',
+        'rawdata/combinationdrugs.dir/')
 
 
-def pairdrugs(infile, outfile):
+def pairdrugs_updatedsignatures(infile, outfiles, outfile_root):
 
     import json, requests
     from pprint import pprint
 
-    list_currentovdrugs = ["paclitaxel", "gemcitabine", "cisplatin", "doxorubicin", "topotecan", "docetaxel", "etoposide", "cyclophosphadmide", "ifosfamide", "irinotecan", "pemetrexed", "tamoxifen", ""]
+    list_currentovdrugs = ["paclitaxel", "gemcitabine", "cisplatin", "doxorubicin", "topotecan", "docetaxel", "etoposide", "cyclophosphamide", "ifosfamide", "irinotecan", "pemetrexed", "tamoxifen"]
     
     df_sigmetadata = pd.read_csv("/Users/maayanlab/Documents/Ovarian Cancer Project/ovarian-cancer/CD_signature_metadata.csv").set_index("sig_id")
     
@@ -775,7 +780,11 @@ def pairdrugs(infile, outfile):
     
     df_genesig = pd.DataFrame(genesignatures)
 
+    df_genesig = df_genesig.T
+
     L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+
+    dict_updated_genesig = {}
     
     for drug in list_currentovdrugs:
 
@@ -821,7 +830,7 @@ def pairdrugs(infile, outfile):
 
 
 
-        # extracting up and down genes for drug from df to be used for subtracting from each patient's signature
+        # extracting up and down genes for drug from df and for patients from df to be used for subtracting from each patient's signature
 
         current_down = []
         current_up = []
@@ -836,6 +845,288 @@ def pairdrugs(infile, outfile):
         for sample, rowdata in df_genesig.iterrows():
             sample_bottom_temp = rowdata["bottom"]
             sample_top_temp = rowdata["top"]
+
+            # subtracting drug genes from sample genes
+            for gene in sample_bottom_temp:
+                if gene in current_up:
+                    sample_bottom_temp.remove(gene)
+            for gene2 in sample_top_temp:
+                if gene2 in current_down:
+                    sample_top_temp.remove(gene2)
+            
+            updated_genesets = {
+                "top":sample_top_temp,
+                "bottom":sample_bottom_temp
+            }
+            
+            # Extract the top 500 genes from the index
+            dict_updated_genesig[sample] = updated_genesets
+        
+        outfile = '{outfile_root}{drug}_updatedsignatures.json'.format(**locals())
+
+        # open file
+        f = open(outfile, 'w')
+
+        # write to file
+        f.write(json.dumps(dict_updated_genesig, ensure_ascii=False, indent=4))
+
+        # close file
+        f.close()
+
+    
+
+
+
+########################################################################
+########################################################################
+########## S10. Finding Combination Drugs from Updated Gene Signatures
+#######################################################################
+#######################################################################
+
+# ##### Takes updated gene signatures and predicts drug pairs for each of these drugs for each patient based on the patient's gene signature.
+# ### Inputs: Updated list of gene signatures (for each drug)
+# ### Output: List of predicted drugs to be paired with each currently used drug for each patient.
+
+# ##################################################
+# ########## 1. Query L1000 to find reversing drugs
+# #################################################
+
+
+
+@transform(pairdrugs_updatedsignatures,
+            suffix("_updatedsignatures.json"),
+            "_resultids.json")
+
+
+def pairdrugs_queryL1000(infile, outfile):
+
+    print(outfile)
+
+    # query the L1000 signatures using gene sets
+
+    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+
+
+    # create empty dictionary for L1000FWD result ids
+    l1000_pair_reversing_resultids = {}
+
+    with open(infile) as infile2:
+        updatedsig = json.load(infile2)
+
+    # Loop through dictionary
+    for sample, genesets in updatedsig.items():
+
+        payload = {
+            # put downregulated genes in the upregulated spot to find drugs that reverse the signature
+            # same with upregulated gewnes in the downregulated spot
+            'up_genes': genesets['bottom'],
+            'down_genes': genesets['top']
+        }
+        
+        response = requests.post(L1000FWD_URL + 'sig_search', json=payload)
+            
+        if response.status_code == 200:
+            l1000_pair_reversing_resultids[sample] = response.json() #saving results to a dictionary
+            json.dump(response.json(), open('api3_result.json', 'w'), indent=4)      
+
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(l1000_pair_reversing_resultids, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
+
+
+
+########################################################################
+########## 2. Top 50 signature ids for reversing drugs for each sample
+#######################################################################
+
+
+@transform(pairdrugs_queryL1000,
+            suffix("_resultids.json"),
+            "_top50results.json")
+
+
+def pairdrugs_top50(infile, outfile):
+
+    print(outfile)
+
+    with open(infile) as infile2:
+        drugresults = json.load(infile2)
+    
+    
+    # create empty dictionary
+    l1000_pair_reversing_top50 = {}
+    
+    
+    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+    
+    
+    
+    for k in drugresults:
+        result_id = str(drugresults[k])
+        result_id_edited = result_id[15:39] # getting just result id from string
+        
+        response = requests.get(L1000FWD_URL + 'result/topn/' + result_id_edited)
+        
+        if response.status_code == 200:
+            l1000_pair_reversing_top50[k] = response.json() # adding top 50 results to dictionary
+            json.dump(response.json(), open('api4_result.json', 'w'), indent=4)
+
+
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(l1000_pair_reversing_top50, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
+
+
+
+
+######################################################################
+########## 3. Making top 50 results nested dictionary into dataframe
+######################################################################
+
+
+@transform(pairdrugs_top50,
+            suffix('_top50results.json'),
+            "_top50results_todf.txt")
+
+
+def pairdrugs_top50_todf(infile, outfile):
+    
+    print(outfile)
+
+    with open(infile) as infile2:
+        top50_dict = json.load(infile2)
+
+
+    temp_df_signatureids = pd.DataFrame(top50_dict).T
+
+    df_list = []
+
+    for sample, rowdata in temp_df_signatureids.iterrows(): # row id is sample, other data is rowdata
+        for direction in ["similar"]:
+            df = pd.DataFrame(rowdata[direction])
+            df["sample"] = sample
+            df_list.append(df)
+    df_signatureids = pd.concat(df_list)
+
+    df_signatureids2 = df_signatureids.set_index("sig_id")
+    
+    df_signatureids2.to_csv(outfile, sep="\t")
+
+
+
+
+##############################################################
+########## 4. Getting single singature by id
+##############################################################
+
+@transform(pairdrugs_top50_todf,
+            suffix('_top50results_todf.txt'),
+            "_predicteddrugsignature.json")
+
+
+def pairdrugs_predicteddrugsignature(infile, outfile):
+    
+    print(outfile)
+
+    L1000FWD_URL = 'http://amp.pharm.mssm.edu/L1000FWD/'
+
+    df_top50 = pd.read_table(infile)
+    
+    list_sigids2 = list(df_top50["sig_id"])
+
+    dict_pair_predicteddrugsignatures = {}
+
+    for signature_id in list_sigids2:
+        response = requests.get(L1000FWD_URL + 'sig/' + signature_id)
+        if response.status_code == 200:
+            dict_pair_predicteddrugsignatures[signature_id] = (response.json())
+#       json.dump(response.json(), open('api2_result.json', 'w'), indent=4)
+
+
+    # open file
+    f = open(outfile, 'w')
+
+    # write to file
+    f.write(json.dumps(dict_pair_predicteddrugsignatures, ensure_ascii=False, indent=4))
+
+    # close file
+    f.close()
+
+
+
+
+
+########################################################################
+########################################################################
+########## S11. Combination Drugs Analysis
+#######################################################################
+#######################################################################
+
+# ##### Takes dictionary of pair drug signatures for each current drug and ???
+# ### Inputs: Updated list of gene signatures (for each drug)
+# ### Output: List of predicted drugs to be paired with each currently used drug for each patient.
+
+# ##################################################################################################
+# ########## 1. Make dictionary into dataframe with fields of interest and pvals from top50 results
+# ##################################################################################################
+
+@transform(pairdrugs_predicteddrugsignature,
+            regex(r'(.*)_predicteddrugsignature.json'),
+            add_inputs(r'\1_top50results_todf.txt'),
+            r"\1_df_foranalysis.txt")
+
+
+def pairdrugs_df_analysis(infiles, outfile):
+
+    signaturefile, top50file = infiles
+
+    print(outfile)
+
+    with open(signaturefile) as infile2:
+        pair_drugsignatures_dict = json.load(infile2)
+
+    df_pair_drugsignatures = pd.DataFrame(pair_drugsignatures_dict).T.set_index("sig_id")
+
+    df_pair_signatureids = pd.read_table(top50file).set_index("sig_id")
+
+    df_pair_foranalysis = pd.DataFrame()
+
+    list_sigids = df_pair_drugsignatures.index.tolist()
+    list_pertdesc = (df_pair_drugsignatures["pert_desc"]).tolist()
+    list_pertdose = (df_pair_drugsignatures["pert_dose"]).tolist()
+    list_pertid = (df_pair_drugsignatures["pert_id"]).tolist()
+    list_perttime = (df_pair_drugsignatures["pert_time"]).tolist()
+    df_pair_foranalysis["sig_id"] = list_sigids
+    df_pair_foranalysis["pert_desc"] = list_pertdesc
+    df_pair_foranalysis["pert_dose"] = list_pertdose
+    df_pair_foranalysis["pert_id"] = list_pertid
+    df_pair_foranalysis["pert_time"] = list_perttime
+    df_pair_foranalysis.set_index("sig_id")
+
+    df_pair_foranalysis2 = df_pair_foranalysis.merge(df_pair_signatureids, how="inner", on="sig_id")
+
+    df_pair_foranalysis2 = df_pair_foranalysis2.set_index("sig_id")
+    
+    
+    df_pair_foranalysis2.to_csv(outfile, sep="\t")
+
+
+
+
+
+
+    
+
 
 
 
