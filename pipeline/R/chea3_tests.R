@@ -1,5 +1,5 @@
 {
-  df_test_forloop = read.delim("/Users/maayanlab/Documents/Ovarian Cancer Project/ovarian-cancer/rawdata/5samples_forchea3.txt")
+ h
 
   df_test_forloop2 = df_test_forloop[-c(, 1)]
 
